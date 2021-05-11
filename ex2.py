@@ -100,8 +100,8 @@ class NeighborhoodRecommender(Recommender):
         R_tilde = np.zeros((num_items, num_users))
         R_tilde[ratings.item.values.astype(int), ratings.user.values.astype(int)] = ratings.rating_adjusted.values
 
-        df = pd.DataFrame(R_tilde).astype(pd.SparseDtype("float", 0.0))
-        self.user_corr = df.corr()
+        self.R_tilde = pd.DataFrame(R_tilde).astype(pd.SparseDtype("float", 0.0))
+        self.user_corr = self.R_tilde.corr()
 
     def predict(self, user: int, item: int, timestamp: int) -> float:
         """
