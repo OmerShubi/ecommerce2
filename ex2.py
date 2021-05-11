@@ -38,6 +38,7 @@ class BaselineRecommender(Recommender):
         self.R_hat = ratings.rating.mean()
         self.B_u = ratings.drop('item', axis=1).groupby(by='user').mean()
         self.B_i = ratings.drop('user', axis=1).groupby(by='item').mean()
+        pass
 
 
     def predict(self, user: int, item: int, timestamp: int) -> float:
@@ -47,7 +48,8 @@ class BaselineRecommender(Recommender):
         :param timestamp: Rating timestamp
         :return: Predicted rating of the user for the item
         """
-        pass
+        prediction = self.R_hat + self.B_u.loc[user] + self.B_i.loc[item]
+        return float(np.clip(prediction, a_min=0.5, a_max=5))
 
 
 class NeighborhoodRecommender(Recommender):
