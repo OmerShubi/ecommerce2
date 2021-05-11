@@ -32,8 +32,13 @@ class Recommender(abc.ABC):
 
 
 class BaselineRecommender(Recommender):
+    # TODO runtime 1 minute max
     def initialize_predictor(self, ratings: pd.DataFrame):
-        pass
+        ratings.drop('timestamp', axis=1, inplace=True)
+        self.R_hat = ratings.rating.mean()
+        self.B_u = ratings.drop('item', axis=1).groupby(by='user').mean()
+        self.B_i = ratings.drop('user', axis=1).groupby(by='item').mean()
+
 
     def predict(self, user: int, item: int, timestamp: int) -> float:
         """
