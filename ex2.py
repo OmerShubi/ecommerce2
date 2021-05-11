@@ -2,8 +2,22 @@ import abc
 from typing import Tuple
 import pandas as pd
 import numpy as np
+from multiprocessing import  Pool
 
 # TODO rename filename
+
+
+def parallelize_dataframe(df, func, n_cores=4):
+    df_split = np.array_split(df, n_cores)
+    pool = Pool(n_cores)
+    df = pd.concat(pool.map(func, df_split))
+    pool.close()
+    pool.join()
+    return df
+
+
+
+
 
 class Recommender(abc.ABC):
     def __init__(self, ratings: pd.DataFrame):
@@ -28,8 +42,18 @@ class Recommender(abc.ABC):
         :param true_ratings: DataFrame of the real ratings
         :return: RMSE score
         """
-        pass
+        true_ratings['prediction'] = true_ratings.apply(lambda x: self.predict(user=x[0],
+                                                                               item=x[1],
+                                                                               timestamp=x[3]), axis=1)
 
+        # res = parallelize_dataframe(true_ratings, self.rmse_split, n_cores=4)
+        # pass
+
+    def rmse_split(self, true_ratings):
+        true_ratings['prediction'] = true_ratings.apply(lambda x: self.predict(user=x[0],
+                                                                               item=x[1],
+                                                                               timestamp=x[3]), axis=1)
+        return true_ratings
 
 class BaselineRecommender(Recommender):
     # TODO runtime 1 minute max
