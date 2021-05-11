@@ -3,7 +3,7 @@ from typing import Tuple
 import pandas as pd
 import numpy as np
 from multiprocessing import  Pool
-
+# from sklearn.metrics import mean_squared_error todo
 # TODO rename filename
 
 
@@ -88,9 +88,20 @@ class NeighborhoodRecommender(Recommender):
         ratings = ratings.copy(deep=True)
         ratings.drop('timestamp', axis=1, inplace=True)
         self.R_hat = ratings.rating.mean()
-        self.R_tilde = ratings
-        self.B_u = ratings.drop('item', axis=1).groupby(by='user').mean()
-        self.B_i = ratings.drop('user', axis=1).groupby(by='item').mean()
+        self.B_u = ratings.drop('item', axis=1).groupby(by='user', as_index=False, sort=False).mean().rename(
+            columns={'rating': 'user_rating_mean'})
+        self.B_i = ratings.drop('user', axis=1).groupby(by='item', as_index=False, sort=False).mean().rename(
+            columns={'rating': 'item_rating_mean'})
+
+        ratings['rating_adjusted'] = ratings['rating']-self.R_hat
+        num_users =len(self.B_u)
+        num_items =len(self.B_i)
+
+        R_tilde = np.zeros((num_items, num_users))
+        R_tilde[ratings.item.values.astype(int), ratings.user.values.astype(int)] = ratings.rating_adjusted.values
+
+        df = pd.DataFrame(R_tilde).astype(pd.SparseDtype("float", 0.0))
+        self.user_corr = df.corr()
 
     def predict(self, user: int, item: int, timestamp: int) -> float:
         """
@@ -107,7 +118,8 @@ class NeighborhoodRecommender(Recommender):
         :param user2: User identifier
         :return: The correlation of the two users (between -1 and 1)
         """
-        pass
+        corr = self.user_corr.loc[user1, user2]
+        return corr
 
 
 class LSRecommender(Recommender):
