@@ -43,26 +43,33 @@ class Recommender(abc.ABC):
         :return: RMSE score
         """
 
-        res = parallelize_dataframe(true_ratings, self.rmse_split, n_cores=4)
+        ratings = pd.merge(true_ratings, self.B_u, on='user', how='left', sort=False)
+        ratings = pd.merge(ratings, self.B_i, on='item', how='left', sort=False)
 
-        rmse = np.sqrt(np.mean((res['rating'] - res['prediction'])**2))
+        ratings['base_prediction'] = self.R_hat + ratings['user_rating_mean'] + ratings['item_rating_mean']
+        ratings['base_prediction'] = np.clip(ratings['base_prediction'], a_min=0.5, a_max=5)
 
+        # Ratings['rating_adjusted'] = Ratings['rating']-Ratings['rating_mean']
+        # res = parallelize_dataframe(true_ratings, self.rmse_split, n_cores=4)
+
+        rmse = np.sqrt(np.mean((ratings['rating'] - ratings['base_prediction'])**2))
         return rmse
-
-    def rmse_split(self, true_ratings):
-        true_ratings['prediction'] = true_ratings.apply(lambda x: self.predict(user=x[0],
-                                                                               item=x[1],
-                                                                               timestamp=x[3]), axis=1)
-        return true_ratings
+    #
+    # def rmse_split(self, true_ratings):
+    #     true_ratings['prediction'] = true_ratings.apply(lambda x: self.predict(user=x[0],  item=x[1], timestamp=x[3]),
+    #                                                     axis=1)
+    #     return true_ratings
 
 class BaselineRecommender(Recommender):
     # TODO runtime 1 minute max
     def initialize_predictor(self, ratings: pd.DataFrame):
+        ratings = ratings.copy(deep=True)
         ratings.drop('timestamp', axis=1, inplace=True)
         self.R_hat = ratings.rating.mean()
-        self.B_u = ratings.drop('item', axis=1).groupby(by='user').mean()
-        self.B_i = ratings.drop('user', axis=1).groupby(by='item').mean()
-        pass
+        self.B_u = ratings.drop('item', axis=1).groupby(by='user', as_index=False, sort=False).mean().rename(
+            columns={'rating': 'user_rating_mean'})
+        self.B_i = ratings.drop('user', axis=1).groupby(by='item', as_index=False, sort=False).mean().rename(
+            columns={'rating': 'item_rating_mean'})
 
 
     def predict(self, user: int, item: int, timestamp: int) -> float:
@@ -72,13 +79,18 @@ class BaselineRecommender(Recommender):
         :param timestamp: Rating timestamp
         :return: Predicted rating of the user for the item
         """
-        prediction = self.R_hat + self.B_u.loc[user] + self.B_i.loc[item]
+        prediction = self.R_hat + self.B_u.loc[self.B_u.user == user, 'user_rating_mean'].values + self.B_i.loc[self.B_i.item == item,'item_rating_mean'].values
         return float(np.clip(prediction, a_min=0.5, a_max=5))
 
 
 class NeighborhoodRecommender(Recommender):
     def initialize_predictor(self, ratings: pd.DataFrame):
-        pass
+        ratings = ratings.copy(deep=True)
+        ratings.drop('timestamp', axis=1, inplace=True)
+        self.R_hat = ratings.rating.mean()
+        self.R_tilde = ratings
+        self.B_u = ratings.drop('item', axis=1).groupby(by='user').mean()
+        self.B_i = ratings.drop('user', axis=1).groupby(by='item').mean()
 
     def predict(self, user: int, item: int, timestamp: int) -> float:
         """
