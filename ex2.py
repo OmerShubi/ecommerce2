@@ -42,12 +42,12 @@ class Recommender(abc.ABC):
         :param true_ratings: DataFrame of the real ratings
         :return: RMSE score
         """
-        true_ratings['prediction'] = true_ratings.apply(lambda x: self.predict(user=x[0],
-                                                                               item=x[1],
-                                                                               timestamp=x[3]), axis=1)
 
-        # res = parallelize_dataframe(true_ratings, self.rmse_split, n_cores=4)
-        # pass
+        res = parallelize_dataframe(true_ratings, self.rmse_split, n_cores=4)
+
+        rmse = np.sqrt(np.mean((res['rating'] - res['prediction'])**2))
+
+        return rmse
 
     def rmse_split(self, true_ratings):
         true_ratings['prediction'] = true_ratings.apply(lambda x: self.predict(user=x[0],
