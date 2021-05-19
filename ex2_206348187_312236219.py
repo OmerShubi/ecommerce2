@@ -92,20 +92,17 @@ class NeighborhoodRecommender(Recommender):
 
         R_tilde = np.zeros((num_items, num_users))
         R_tilde[ratings.item.values.astype(int), ratings.user.values.astype(int)] = ratings.rating_adjusted.values
-
         self.R_tilde = pd.DataFrame(R_tilde).astype(pd.SparseDtype("float", 0.0))
 
-        self.user_corr = self.R_tilde.corr(method=NeighborhoodRecommender.custom_corr)
-        self.groupby_per_item = ratings.groupby(by='item')# TODO drop ratings and rating_adjusted
+        self.binary_R_tilde = self.R_tilde != 0
+        R_tilde_square = self.R_tilde ** 2
+        a = R_tilde_square.transpose().dot(self.binary_R_tilde)
+        denominator = a.transpose() * a
+        nominator = self.R_tilde.transpose().dot(self.R_tilde)
+        corr = nominator / np.sqrt(denominator)
+        self.user_corr = corr.fillna(0)
+        self.groupby_per_item = ratings.groupby(by='item')  # TODO drop ratings and rating_adjusted
 
-    @staticmethod
-    def custom_corr(a, b):
-        common_indices = np.intersect1d(np.nonzero(a)[0], np.nonzero(b)[0])
-        # if no common ratings
-        if common_indices.size == 0:
-            return 0
-        corr = np.dot(a, b) / (np.linalg.norm(a[common_indices]) * np.linalg.norm(b[common_indices]))
-        return corr
 
     def predict(self, user: int, item: int, timestamp: int) -> float:
         """
