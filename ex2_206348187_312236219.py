@@ -101,7 +101,7 @@ class NeighborhoodRecommender(Recommender):
         self.user_corr = corr.fillna(0)
         self.binary_R_tilde = self.binary_R_tilde.sparse.to_dense()
         self.R_tilde = self.R_tilde.sparse.to_dense()
-        self.num_neighbours = 7 # TODO 3
+        self.num_neighbours = 3
 
     def predict(self, user: int, item: int, timestamp: int) -> float:
         """
@@ -119,7 +119,7 @@ class NeighborhoodRecommender(Recommender):
         denominator = nearest_neighbours_corr.abs().sum()
 
         # Handle case where there are no neighbours with correlation
-        if nominator == 0 and denominator == 0:
+        if nominator == 0 or denominator == 0 or denominator == float('inf'):
             neighbour_deviation = 0
         else:
             neighbour_deviation = nominator / denominator
@@ -195,7 +195,7 @@ class LSRecommender(Recommender):
 class CompetitionRecommender(Recommender):
     # TODO
     #  Scale instead of clip at 5 and 0.5
-    #  More time related features (weekday, quarter, year..)
+    #  More time related features (hourly, weekday, quarter, year..)
     #  Abs correlation? K neighbours? Distance measures
     #  Item based similarity
 
@@ -221,14 +221,6 @@ class CompetitionRecommender(Recommender):
 
         self.solve_ls()
 
-        from sklearn.preprocessing import MinMaxScaler
-        prediction_raw = raw_ratings.apply(
-            lambda x: self.raw_predict(user=int(x[0]), item=int(x[1]), timestamp=x[3]), axis=1)
-
-        self.scaler = MinMaxScaler(feature_range=(0.5, 5), clip=True)
-
-        self.scaler.fit(prediction_raw.values.reshape(-1, 1))
-
 
     def solve_ls(self) -> None:
         """
@@ -247,7 +239,7 @@ class CompetitionRecommender(Recommender):
         """
         prediction = self.raw_predict(user, item, timestamp)
 
-        return self.scaler.transform(np.array(prediction).reshape(-1,1))
+        return float(np.clip(prediction, a_min=0.5, a_max=5))
 
     def raw_predict(self, user: int, item: int, timestamp: int) -> float:
 

@@ -54,10 +54,10 @@ def main():
     # print(baseline_recommender.rmse(test))
     # print(f'BaselineRecommender predict took {time.time() - start:.2f}s')
     #
-    # neighborhood_recommender = ex2.NeighborhoodRecommender(train)
-    # print(f'neighborhood_recommender init took {time.time() - start:.2f}s')
-    # print(neighborhood_recommender.rmse(test))
-    # print(f'neighborhood_recommender predict (total) took {time.time() - start:.2f}s')
+    neighborhood_recommender = ex2.NeighborhoodRecommender(train)
+    print(f'neighborhood_recommender init took {time.time() - start:.2f}s')
+    print(neighborhood_recommender.rmse(test))
+    print(f'neighborhood_recommender predict (total) took {time.time() - start:.2f}s')
     #
     # # PART B
     # start = time.time()
