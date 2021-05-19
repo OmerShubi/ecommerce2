@@ -158,7 +158,7 @@ class LSRecommender(Recommender):
         self.y = ratings['rating'] - self.R_hat
         ratings.drop(['timestamp', 'rating', 'date','weekday'], axis=1, inplace=True)
         ratings = ratings.astype(int)
-        self.X = pd.get_dummies(ratings, columns=['user', 'item'])
+        self.X = pd.get_dummies(ratings, columns=['user', 'item'], sparse=True)
         self.is_weekend_index = self.X.columns.get_loc('is_weekend')
         self.is_daytime_index = self.X.columns.get_loc('is_daytime')
         self.is_nighttime_index = self.X.columns.get_loc('is_nighttime')
@@ -194,12 +194,16 @@ class LSRecommender(Recommender):
         Creates and solves the least squares regression
         :return: Tuple of X, b, y such that b is the solution to min ||Xb-y||
         """
-        # TODO sparse?
-        self.beta, _, _, _ = np.linalg.lstsq(self.X, self.y)
+        self.beta, _, _, _ = np.linalg.lstsq(self.X, self.y, rcond=None)
         return (self.X, self.beta, self.y)
 
 
 class CompetitionRecommender(Recommender):
+    # TODO
+    #  Scale instead of clip at 5 and 0.5
+    #  More time related features (weekday, quarter, year..)
+    #  Abs correlation? K neighbours
+
     def initialize_predictor(self, ratings: pd.DataFrame):
         pass
 
