@@ -42,7 +42,7 @@ class Recommender(abc.ABC):
         :return: RMSE score
         """
 
-        true_ratings['prediction'] = true_ratings.apply(lambda x: self.predict(user=x[0], item=x[1], timestamp=x[3]), axis=1)
+        true_ratings['prediction'] = true_ratings.apply(lambda x: self.predict(user=int(x[0]), item=int(x[1]), timestamp=x[3]), axis=1)
         rmse = np.sqrt(np.mean((true_ratings['rating'] - true_ratings['prediction'])**2))
         return rmse
 
@@ -80,12 +80,10 @@ class NeighborhoodRecommender(Recommender):
         ratings = ratings.copy(deep=True)
         ratings.drop('timestamp', axis=1, inplace=True)
         self.R_hat = ratings.rating.mean()
-        self.B_u = ratings.drop('item', axis=1).groupby(by='user').mean().rename(
-            columns={'rating': 'user_rating_mean'})
+        self.B_u = ratings.drop('item', axis=1).groupby(by='user').mean().rename(columns={'rating': 'user_rating_mean'})
 
         self.B_u['user_rating_mean'] -= self.R_hat
-        self.B_i = ratings.drop('user', axis=1).groupby(by='item').mean().rename(
-            columns={'rating': 'item_rating_mean'})
+        self.B_i = ratings.drop('user', axis=1).groupby(by='item').mean().rename(columns={'rating': 'item_rating_mean'})
         self.B_i['item_rating_mean'] -= self.R_hat
 
         ratings['rating_adjusted'] = ratings['rating']-self.R_hat
@@ -97,16 +95,17 @@ class NeighborhoodRecommender(Recommender):
 
         self.R_tilde = pd.DataFrame(R_tilde).astype(pd.SparseDtype("float", 0.0))
 
-        def custom_corr(a, b):
-            common_indices = np.intersect1d(np.nonzero(a)[0], np.nonzero(b)[0])
-            # if no common ratings
-            from sklearn.metrics.pairwise import cosine_similarity
-            if common_indices.size == 0:
-                return 0
-            corr = cosine_similarity(a[common_indices].reshape(1, -1), b[common_indices].reshape(1, -1))
-            return np.dot(a, b)/(np.linalg.norm(a[common_indices])*np.linalg.norm(b[common_indices]))
-        self.user_corr = self.R_tilde.corr(method=custom_corr)
-        pass
+        self.user_corr = self.R_tilde.corr(method=NeighborhoodRecommender.custom_corr)
+        self.groupby_per_item = ratings.groupby(by='item')# TODO drop ratings and rating_adjusted
+
+    @staticmethod
+    def custom_corr(a, b):
+        common_indices = np.intersect1d(np.nonzero(a)[0], np.nonzero(b)[0])
+        # if no common ratings
+        if common_indices.size == 0:
+            return 0
+        corr = np.dot(a, b) / (np.linalg.norm(a[common_indices]) * np.linalg.norm(b[common_indices]))
+        return corr
 
     def predict(self, user: int, item: int, timestamp: int) -> float:
         """
@@ -115,7 +114,14 @@ class NeighborhoodRecommender(Recommender):
         :param timestamp: Rating timestamp
         :return: Predicted rating of the user for the item
         """
-        pass
+
+        neighbours = set(self.groupby_per_item.get_group(item)['user'].values) - {user}
+        nearest_neighbours_corr = self.user_corr[user][neighbours].sort_values(ascending=False).iloc[:3]
+        nearest_neighbours_ratings = self.R_tilde.loc[int(item), nearest_neighbours_corr.index]
+        neighbour_deviation = (nearest_neighbours_corr*nearest_neighbours_ratings).sum()/nearest_neighbours_corr.abs().sum()
+
+        prediction = self.R_hat + self.B_u.loc[user, 'user_rating_mean'] + self.B_i.loc[item, 'item_rating_mean'] + neighbour_deviation
+        return float(np.clip(prediction, a_min=0.5, a_max=5))
 
     def user_similarity(self, user1: int, user2: int) -> float:
         """
