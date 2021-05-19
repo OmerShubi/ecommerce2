@@ -75,9 +75,10 @@ def main():
     # print(comp_recommender.rmse(test_comp))
 
     comp_recommender = ex2.CompetitionRecommender(train)
+    print(f'Comp init time took {time.time() - start:.2f}s')
     print(comp_recommender.rmse(test))
 
-    print(f'Comp time took {time.time() - start:.2f}s')
+    print(f'Comp total time took {time.time() - start:.2f}s')
 
 
 if __name__ == '__main__':
