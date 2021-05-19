@@ -42,24 +42,10 @@ class Recommender(abc.ABC):
         :return: RMSE score
         """
 
-        # ratings = pd.merge(true_ratings, self.B_u, on='user', how='left', sort=False)
-        # ratings = pd.merge(ratings, self.B_i, on='item', how='left', sort=False)
-        #
-        # ratings['base_prediction'] = self.R_hat + ratings['user_rating_mean'] + ratings['item_rating_mean']
-        # ratings['base_prediction'] = np.clip(ratings['base_prediction'], a_min=0.5, a_max=5)
-
-        # Ratings['rating_adjusted'] = Ratings['rating']-Ratings['rating_mean']
-        # res = parallelize_dataframe(true_ratings, self.rmse_split, n_cores=4)
-
         true_ratings['prediction'] = true_ratings.apply(lambda x: self.predict(user=x[0], item=x[1], timestamp=x[3]), axis=1)
         rmse = np.sqrt(np.mean((true_ratings['rating'] - true_ratings['prediction'])**2))
-        # rmse = np.sqrt(np.mean((ratings['rating'] - ratings['base_prediction'])**2))
         return rmse
-    #
-    # def rmse_split(self, true_ratings):
-    #     true_ratings['prediction'] = true_ratings.apply(lambda x: self.predict(user=x[0],  item=x[1], timestamp=x[3]),
-    #                                                     axis=1)
-    #     return true_ratings
+
 
 class BaselineRecommender(Recommender):
     # TODO runtime 1 minute max
@@ -74,7 +60,7 @@ class BaselineRecommender(Recommender):
         self.B_i = ratings.drop('user', axis=1).groupby(by='item').mean().rename(
             columns={'rating': 'item_rating_mean'})
         self.B_i['item_rating_mean'] -= self.R_hat
-        pass
+
 
 
     def predict(self, user: int, item: int, timestamp: int) -> float:
@@ -94,20 +80,33 @@ class NeighborhoodRecommender(Recommender):
         ratings = ratings.copy(deep=True)
         ratings.drop('timestamp', axis=1, inplace=True)
         self.R_hat = ratings.rating.mean()
-        self.B_u = ratings.drop('item', axis=1).groupby(by='user', as_index=False, sort=False).mean().rename(
+        self.B_u = ratings.drop('item', axis=1).groupby(by='user').mean().rename(
             columns={'rating': 'user_rating_mean'})
-        self.B_i = ratings.drop('user', axis=1).groupby(by='item', as_index=False, sort=False).mean().rename(
+
+        self.B_u['user_rating_mean'] -= self.R_hat
+        self.B_i = ratings.drop('user', axis=1).groupby(by='item').mean().rename(
             columns={'rating': 'item_rating_mean'})
+        self.B_i['item_rating_mean'] -= self.R_hat
 
         ratings['rating_adjusted'] = ratings['rating']-self.R_hat
-        num_users =len(self.B_u)
-        num_items =len(self.B_i)
+        num_users = len(self.B_u)
+        num_items = len(self.B_i)
 
         R_tilde = np.zeros((num_items, num_users))
         R_tilde[ratings.item.values.astype(int), ratings.user.values.astype(int)] = ratings.rating_adjusted.values
 
         self.R_tilde = pd.DataFrame(R_tilde).astype(pd.SparseDtype("float", 0.0))
-        self.user_corr = self.R_tilde.corr()
+
+        def custom_corr(a, b):
+            common_indices = np.intersect1d(np.nonzero(a)[0], np.nonzero(b)[0])
+            # if no common ratings
+            from sklearn.metrics.pairwise import cosine_similarity
+            if common_indices.size == 0:
+                return 0
+            corr = cosine_similarity(a[common_indices].reshape(1, -1), b[common_indices].reshape(1, -1))
+            return np.dot(a, b)/(np.linalg.norm(a[common_indices])*np.linalg.norm(b[common_indices]))
+        self.user_corr = self.R_tilde.corr(method=custom_corr)
+        pass
 
     def predict(self, user: int, item: int, timestamp: int) -> float:
         """
