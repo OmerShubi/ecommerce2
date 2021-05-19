@@ -48,7 +48,7 @@ def main():
     ratings = transform(pd.read_csv('ratings.csv'))
     train, test = train_test_split(ratings)
     # PART A
-    # start = time.time()
+    start = time.time()
     # baseline_recommender = ex2.BaselineRecommender(train)
     # print(f'BaselineRecommender init took {time.time() - start:.2f}s')
     # print(baseline_recommender.rmse(test))

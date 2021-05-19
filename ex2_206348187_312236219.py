@@ -5,17 +5,7 @@ import numpy as np
 from multiprocessing import  Pool
 import datetime
  # TODO NO GLOBAL PARAMS
-from scipy.sparse.linalg import svds
-
-
-def parallelize_dataframe(df, func, n_cores=4):
-    df_split = np.array_split(df, n_cores)
-    pool = Pool(n_cores)
-    df = pd.concat(pool.map(func, df_split))
-    pool.close()
-    pool.join()
-    return df
-
+# TODO run on VM
 
 
 
@@ -45,6 +35,7 @@ class Recommender(abc.ABC):
         """
 
         true_ratings['prediction'] = true_ratings.apply(lambda x: self.predict(user=int(x[0]), item=int(x[1]), timestamp=x[3]), axis=1)
+
         rmse = np.sqrt(np.mean((true_ratings['rating'] - true_ratings['prediction'])**2))
         return rmse
 
@@ -110,6 +101,7 @@ class NeighborhoodRecommender(Recommender):
         self.user_corr = corr.fillna(0)
         self.binary_R_tilde = self.binary_R_tilde.sparse.to_dense()
         self.R_tilde = self.R_tilde.sparse.to_dense()
+        self.num_neighbours = 7 # TODO 3
 
     def predict(self, user: int, item: int, timestamp: int) -> float:
         """
@@ -120,7 +112,7 @@ class NeighborhoodRecommender(Recommender):
         """
         nearest_neighbours = self.binary_R_tilde.loc[item]*self.user_corr.loc[user]
         nearest_neighbours.loc[nearest_neighbours == 0] = -1 * float('inf')
-        nearest_neighbours_corr = nearest_neighbours.nlargest(n=3)
+        nearest_neighbours_corr = nearest_neighbours.nlargest(n=self.num_neighbours)
 
         nearest_neighbours_ratings = self.R_tilde.loc[int(item), nearest_neighbours_corr.index]
         nominator = (nearest_neighbours_corr*nearest_neighbours_ratings).sum()
@@ -205,10 +197,11 @@ class CompetitionRecommender(Recommender):
     #  Scale instead of clip at 5 and 0.5
     #  More time related features (weekday, quarter, year..)
     #  Abs correlation? K neighbours? Distance measures
-    # Item based similarity
+    #  Item based similarity
 
     def initialize_predictor(self, ratings: pd.DataFrame):
         ratings = ratings.copy(deep=True)
+        raw_ratings = ratings.copy(deep=True)
         ratings['date'] = pd.to_datetime(ratings['timestamp'], unit='s')
         ratings['weekday'] = pd.to_datetime(ratings['date']).dt.dayofweek  # monday = 0, sunday = 6
         ratings['is_weekend'] = 0
@@ -228,6 +221,14 @@ class CompetitionRecommender(Recommender):
 
         self.solve_ls()
 
+        from sklearn.preprocessing import MinMaxScaler
+        prediction_raw = raw_ratings.apply(
+            lambda x: self.raw_predict(user=int(x[0]), item=int(x[1]), timestamp=x[3]), axis=1)
+
+        self.scaler = MinMaxScaler(feature_range=(0.5, 5), clip=True)
+
+        self.scaler.fit(prediction_raw.values.reshape(-1, 1))
+
 
     def solve_ls(self) -> None:
         """
@@ -237,8 +238,6 @@ class CompetitionRecommender(Recommender):
         self.beta, _, _, _ = np.linalg.lstsq(self.X, self.y, rcond=None)
 
 
-
-
     def predict(self, user: int, item: int, timestamp: int) -> float:
         """
         :param user: User identifier
@@ -246,6 +245,12 @@ class CompetitionRecommender(Recommender):
         :param timestamp: Rating timestamp
         :return: Predicted rating of the user for the item
         """
+        prediction = self.raw_predict(user, item, timestamp)
+
+        return self.scaler.transform(np.array(prediction).reshape(-1,1))
+
+    def raw_predict(self, user: int, item: int, timestamp: int) -> float:
+
         # According to result of pd.get_dummies!
         user_index = self.X.columns.get_loc(f'user_{user}')
         item_index = self.X.columns.get_loc(f'item_{item}')
@@ -262,7 +267,6 @@ class CompetitionRecommender(Recommender):
             indices.append(self.is_nighttime_index)
 
         prediction = self.R_hat + self.beta[indices].sum()
-
-        return float(np.clip(prediction, a_min=0.5, a_max=5))
+        return prediction
 
 
