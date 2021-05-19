@@ -94,6 +94,11 @@ class NeighborhoodRecommender(Recommender):
         R_tilde[ratings.item.values.astype(int), ratings.user.values.astype(int)] = ratings.rating_adjusted.values
         self.R_tilde = pd.DataFrame(R_tilde).astype(pd.SparseDtype("float", 0.0))
 
+
+        """
+            Calculate Correlation by:
+            R^T@R / (R**2@S)^T*(R**2@S)
+        """
         self.binary_R_tilde = self.R_tilde != 0
         R_tilde_square = self.R_tilde ** 2
         a = R_tilde_square.transpose().dot(self.binary_R_tilde)
@@ -103,7 +108,8 @@ class NeighborhoodRecommender(Recommender):
         self.user_corr = corr.fillna(0)
         self.groupby_per_item = ratings.groupby(by='item')  # TODO drop ratings and rating_adjusted
 
-
+        self.binary_R_tilde = self.binary_R_tilde.sparse.to_dense()
+        self.R_tilde = self.R_tilde.sparse.to_dense()
     def predict(self, user: int, item: int, timestamp: int) -> float:
         """
         :param user: User identifier
@@ -111,11 +117,18 @@ class NeighborhoodRecommender(Recommender):
         :param timestamp: Rating timestamp
         :return: Predicted rating of the user for the item
         """
+        # TODO without user?
+        nearest_neighbours_corr=(self.binary_R_tilde.loc[item]*self.user_corr.loc[user]).nlargest(n=3)
 
-        neighbours = set(self.groupby_per_item.get_group(item)['user'].values) - {user}
-        nearest_neighbours_corr = self.user_corr[user][neighbours].sort_values(ascending=False).iloc[:3]
         nearest_neighbours_ratings = self.R_tilde.loc[int(item), nearest_neighbours_corr.index]
-        neighbour_deviation = (nearest_neighbours_corr*nearest_neighbours_ratings).sum()/nearest_neighbours_corr.abs().sum()
+        nominator = (nearest_neighbours_corr*nearest_neighbours_ratings).sum()
+        denominator = nearest_neighbours_corr.abs().sum()
+
+        # Handle case where there are no neighbours with correlation
+        if nominator == 0 and denominator == 0:
+            neighbour_deviation = 0
+        else:
+            neighbour_deviation = nominator / denominator
 
         prediction = self.R_hat + self.B_u.loc[user, 'user_rating_mean'] + self.B_i.loc[item, 'item_rating_mean'] + neighbour_deviation
         return float(np.clip(prediction, a_min=0.5, a_max=5))

@@ -49,10 +49,10 @@ def main():
     train, test = train_test_split(ratings)
     start = time.time()
 
-    # baseline_recommender = ex2.BaselineRecommender(train)
-    # print(f'BaselineRecommender init Took {time.time() - start:.2f}s')
-    # print(baseline_recommender.rmse(test))
-    # print(f'BaselineRecommender predict Took {time.time() - start:.2f}s')
+    baseline_recommender = ex2.BaselineRecommender(train)
+    print(f'BaselineRecommender init took {time.time() - start:.2f}s')
+    print(baseline_recommender.rmse(test))
+    print(f'BaselineRecommender predict took {time.time() - start:.2f}s')
 
     neighborhood_recommender = ex2.NeighborhoodRecommender(train)
     print(neighborhood_recommender.rmse(test))
@@ -64,7 +64,7 @@ def main():
     # comp_recommender = ex2.CompetitionRecommender(ratings_comp)
     # print(comp_recommender.rmse(test_comp))
 
-    print(f'Took {time.time() - start:.2f}s')
+    print(f'Total time took {time.time() - start:.2f}s')
 
 
 if __name__ == '__main__':
