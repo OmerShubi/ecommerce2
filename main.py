@@ -49,16 +49,16 @@ def main():
     train, test = train_test_split(ratings)
     start = time.time()
 
-    baseline_recommender = ex2.BaselineRecommender(train)
-    print(f'BaselineRecommender init took {time.time() - start:.2f}s')
-    print(baseline_recommender.rmse(test))
-    print(f'BaselineRecommender predict took {time.time() - start:.2f}s')
-
-    neighborhood_recommender = ex2.NeighborhoodRecommender(train)
-    print(neighborhood_recommender.rmse(test))
-    # ls_recommender = ex2.LSRecommender(train)
-    # ls_recommender.solve_ls()
-    # print(ls_recommender.rmse(test))
+    # baseline_recommender = ex2.BaselineRecommender(train)
+    # print(f'BaselineRecommender init took {time.time() - start:.2f}s')
+    # print(baseline_recommender.rmse(test))
+    # print(f'BaselineRecommender predict took {time.time() - start:.2f}s')
+    #
+    # neighborhood_recommender = ex2.NeighborhoodRecommender(train)
+    # print(neighborhood_recommender.rmse(test))
+    ls_recommender = ex2.LSRecommender(train)
+    ls_recommender.solve_ls()
+    print(ls_recommender.rmse(test))
 
     # ratings_comp = pd.read_csv('ratings_comp.csv')
     # comp_recommender = ex2.CompetitionRecommender(ratings_comp)

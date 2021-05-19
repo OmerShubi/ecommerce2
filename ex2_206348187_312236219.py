@@ -3,7 +3,7 @@ from typing import Tuple
 import pandas as pd
 import numpy as np
 from multiprocessing import  Pool
-
+import datetime
  # TODO NO GLOBAL PARAMS
 
 def parallelize_dataframe(df, func, n_cores=4):
@@ -106,10 +106,9 @@ class NeighborhoodRecommender(Recommender):
         nominator = self.R_tilde.transpose().dot(self.R_tilde)
         corr = nominator / np.sqrt(denominator)
         self.user_corr = corr.fillna(0)
-        self.groupby_per_item = ratings.groupby(by='item')  # TODO drop ratings and rating_adjusted
-
         self.binary_R_tilde = self.binary_R_tilde.sparse.to_dense()
         self.R_tilde = self.R_tilde.sparse.to_dense()
+
     def predict(self, user: int, item: int, timestamp: int) -> float:
         """
         :param user: User identifier
@@ -117,8 +116,9 @@ class NeighborhoodRecommender(Recommender):
         :param timestamp: Rating timestamp
         :return: Predicted rating of the user for the item
         """
-        # TODO without user?
-        nearest_neighbours_corr=(self.binary_R_tilde.loc[item]*self.user_corr.loc[user]).nlargest(n=3)
+        nearest_neighbours = self.binary_R_tilde.loc[item]*self.user_corr.loc[user]
+        nearest_neighbours.loc[nearest_neighbours == 0] = -1 * float('inf')
+        nearest_neighbours_corr = nearest_neighbours.nlargest(n=3)
 
         nearest_neighbours_ratings = self.R_tilde.loc[int(item), nearest_neighbours_corr.index]
         nominator = (nearest_neighbours_corr*nearest_neighbours_ratings).sum()
@@ -145,7 +145,23 @@ class NeighborhoodRecommender(Recommender):
 
 class LSRecommender(Recommender):
     def initialize_predictor(self, ratings: pd.DataFrame):
-        pass
+        ratings = ratings.copy(deep=True)
+        ratings['date'] = pd.to_datetime(ratings['timestamp'], unit='s')
+        ratings['weekday'] = pd.to_datetime(ratings['date']).dt.dayofweek  # monday = 0, sunday = 6
+        ratings['is_weekend'] = 0
+        ratings.loc[ratings['weekday'].isin([4, 5]), 'is_weekend'] = 1
+        ratings['is_daytime'] = ratings['date'].dt.time.between(datetime.time(6, 00), datetime.time(18, 00))
+        ratings['is_nighttime'] = ~ratings['is_daytime']
+
+        self.R_hat = ratings.rating.mean()
+
+        self.y = ratings['rating'] - self.R_hat
+        ratings.drop(['timestamp', 'rating', 'date','weekday'], axis=1, inplace=True)
+        ratings = ratings.astype(int)
+        self.X = pd.get_dummies(ratings, columns=['user', 'item'])
+        self.is_weekend_index = self.X.columns.get_loc('is_weekend')
+        self.is_daytime_index = self.X.columns.get_loc('is_daytime')
+        self.is_nighttime_index = self.X.columns.get_loc('is_nighttime')
 
     def predict(self, user: int, item: int, timestamp: int) -> float:
         """
@@ -154,14 +170,33 @@ class LSRecommender(Recommender):
         :param timestamp: Rating timestamp
         :return: Predicted rating of the user for the item
         """
-        pass
+        # According to result of pd.get_dummies!
+        user_index = self.X.columns.get_loc(f'user_{user}')
+        item_index = self.X.columns.get_loc(f'item_{item}')
+        indices = [user_index, item_index]
+
+        date = datetime.datetime.fromtimestamp(timestamp)
+
+        if date.weekday() in [4, 5]:
+            indices.append(self.is_weekend_index)
+
+        if date.time() > datetime.time(6, 00) and date.time() < datetime.time(18, 00):
+            indices.append(self.is_daytime_index)
+        else:
+            indices.append(self.is_nighttime_index)
+
+        prediction = self.R_hat + self.beta[indices].sum()
+
+        return float(np.clip(prediction, a_min=0.5, a_max=5))
 
     def solve_ls(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Creates and solves the least squares regression
         :return: Tuple of X, b, y such that b is the solution to min ||Xb-y||
         """
-        pass
+        # TODO sparse?
+        self.beta, _, _, _ = np.linalg.lstsq(self.X, self.y)
+        return (self.X, self.beta, self.y)
 
 
 class CompetitionRecommender(Recommender):
