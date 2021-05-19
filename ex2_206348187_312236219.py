@@ -2,7 +2,6 @@ import abc
 from typing import Tuple
 import pandas as pd
 import numpy as np
-from multiprocessing import  Pool
 import datetime
  # TODO NO GLOBAL PARAMS
 # TODO run on VM
