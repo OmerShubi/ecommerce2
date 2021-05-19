@@ -5,6 +5,8 @@ import numpy as np
 from multiprocessing import  Pool
 import datetime
  # TODO NO GLOBAL PARAMS
+from scipy.sparse.linalg import svds
+
 
 def parallelize_dataframe(df, func, n_cores=4):
     df_split = np.array_split(df, n_cores)
@@ -202,10 +204,34 @@ class CompetitionRecommender(Recommender):
     # TODO
     #  Scale instead of clip at 5 and 0.5
     #  More time related features (weekday, quarter, year..)
-    #  Abs correlation? K neighbours
+    #  Abs correlation? K neighbours? Distance measures
+    # Item based similarity
 
     def initialize_predictor(self, ratings: pd.DataFrame):
-        pass
+
+        ratings = ratings.copy(deep=True)
+        ratings.drop('timestamp', axis=1, inplace=True)
+        self.R_hat = ratings.rating.mean()
+        self.B_u = ratings.drop('item', axis=1).groupby(by='user').mean().rename(columns={'rating': 'user_rating_mean'})
+
+        self.B_u['user_rating_mean'] -= self.R_hat
+        self.B_i = ratings.drop('user', axis=1).groupby(by='item').mean().rename(columns={'rating': 'item_rating_mean'})
+        self.B_i['item_rating_mean'] -= self.R_hat
+
+        ratings['rating_adjusted'] = ratings['rating']-self.R_hat
+        num_users = len(self.B_u)
+        num_items = len(self.B_i)
+
+        R_tilde = np.zeros((num_items, num_users))
+        R_tilde[ratings.item.values.astype(int), ratings.user.values.astype(int)] = ratings.rating_adjusted.values
+        self.R_tilde = pd.DataFrame(R_tilde).astype(pd.SparseDtype("float", 0.0))
+
+        u, s, vt = svds(self.R_tilde.transpose(), k=5)
+        s_diag = np.diag(s)
+        self.X_pred = np.dot(np.dot(u, s_diag), vt)
+
+
+
 
     def predict(self, user: int, item: int, timestamp: int) -> float:
         """
@@ -214,4 +240,8 @@ class CompetitionRecommender(Recommender):
         :param timestamp: Rating timestamp
         :return: Predicted rating of the user for the item
         """
-        pass
+        prediction = self.X_pred[user, item] + self.R_hat
+
+        return float(np.clip(prediction, a_min=0.5, a_max=5))
+
+
