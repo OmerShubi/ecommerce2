@@ -3,7 +3,9 @@ from typing import Tuple
 import pandas as pd
 import numpy as np
 import datetime
- # TODO NO GLOBAL PARAMS
+from scipy.sparse.linalg import lsqr
+import scipy.sparse
+# NO GLOBAL PARAMS
 # TODO run on VM
 
 
@@ -36,9 +38,8 @@ class Recommender(abc.ABC):
         rmse = np.sqrt(np.mean((true_ratings['rating'] - true_ratings['prediction'])**2))
         return rmse
 
-
+# runtime 1 minute max - BaselineRecommender + NeighborhoodRecommender - took 40.73s
 class BaselineRecommender(Recommender):
-    # runtime 1 minute max - took 40.73s
     def initialize_predictor(self, ratings: pd.DataFrame):
         ratings = ratings.copy(deep=True)
         ratings.drop('timestamp', axis=1, inplace=True)
@@ -63,7 +64,6 @@ class BaselineRecommender(Recommender):
 
         prediction = self.R_hat + self.B_u.loc[user, 'user_rating_mean'] + self.B_i.loc[item, 'item_rating_mean']
         return float(np.clip(prediction, a_min=0.5, a_max=5))
-
 
 class NeighborhoodRecommender(Recommender):
     def initialize_predictor(self, ratings: pd.DataFrame):
@@ -134,7 +134,7 @@ class NeighborhoodRecommender(Recommender):
         corr = self.user_corr.loc[user1, user2]
         return corr
 
-
+# runtime 3 minute max - LSRecommender took 0.53s
 class LSRecommender(Recommender):
     def initialize_predictor(self, ratings: pd.DataFrame):
         ratings = ratings.copy(deep=True)
@@ -189,14 +189,7 @@ class LSRecommender(Recommender):
         self.beta, _, _, _ = np.linalg.lstsq(self.X, self.y, rcond=None)
         return (self.X, self.beta, self.y)
 
-
 class CompetitionRecommender(Recommender):
-    # TODO
-    #  Scale instead of clip at 5 and 0.5
-    #  More time related features (hourly, weekday, quarter, year..)
-    #  Abs correlation? K neighbours? Distance measures
-    #  Item based similarity
-
     def initialize_predictor(self, ratings: pd.DataFrame):
         ratings = ratings.copy(deep=True)
         raw_ratings = ratings.copy(deep=True)
@@ -210,14 +203,17 @@ class CompetitionRecommender(Recommender):
         self.R_hat = ratings.rating.mean()
 
         self.y = ratings['rating'] - self.R_hat
-        ratings.drop(['timestamp', 'rating', 'date'], axis=1, inplace=True)
+        ratings.drop(['timestamp', 'rating', 'date', 'weekday'], axis=1, inplace=True)
         ratings = ratings.astype(int)
-        self.X = pd.get_dummies(ratings, columns=['user', 'item', 'weekday'], sparse=True)
+        self.X = pd.get_dummies(ratings, columns=['user', 'item'], sparse=True)
         self.is_weekend_index = self.X.columns.get_loc('is_weekend')
         self.is_daytime_index = self.X.columns.get_loc('is_daytime')
         self.is_nighttime_index = self.X.columns.get_loc('is_nighttime')
+        self.X_scipy = scipy.sparse.csr_matrix(self.X.values)
 
+        #self.beta = np.zeros((len(self.X.columns),))
         self.solve_ls()
+
 
 
     def solve_ls(self) -> None:
@@ -225,7 +221,7 @@ class CompetitionRecommender(Recommender):
         Creates and solves the least squares regression
         :return: Tuple of X, b, y such that b is the solution to min ||Xb-y||
         """
-        self.beta, _, _, _ = np.linalg.lstsq(self.X, self.y, rcond=None)
+        self.beta = lsqr(self.X_scipy, self.y)[0]
 
 
     def predict(self, user: int, item: int, timestamp: int) -> float:
@@ -240,23 +236,28 @@ class CompetitionRecommender(Recommender):
         return float(np.clip(prediction, a_min=0.5, a_max=5))
 
     def raw_predict(self, user: int, item: int, timestamp: int) -> float:
+        try:
+            # According to result of pd.get_dummies!
+            user_index = self.X.columns.get_loc(f'user_{user}')
+            indices = [user_index]
+            try:
+                item_index = self.X.columns.get_loc(f'item_{item}')
+                indices.append(item_index)
+            except KeyError as e:
+                print(f"KeyError:{e}")
+            date = datetime.datetime.fromtimestamp(timestamp)
+            #indices.append(self.X.columns.get_loc(f'weekday_{date.weekday()}'))
+            if date.weekday() in [4, 5]:
+                indices.append(self.is_weekend_index)
 
-        # According to result of pd.get_dummies!
-        user_index = self.X.columns.get_loc(f'user_{user}')
-        item_index = self.X.columns.get_loc(f'item_{item}')
-        indices = [user_index, item_index]
+            if date.time() > datetime.time(6, 00) and date.time() < datetime.time(18, 00):
+                indices.append(self.is_daytime_index)
+            else:
+                indices.append(self.is_nighttime_index)
 
-        date = datetime.datetime.fromtimestamp(timestamp)
-        indices.append(self.X.columns.get_loc(f'weekday_{date.weekday()}'))
-        if date.weekday() in [4, 5]:
-            indices.append(self.is_weekend_index)
-
-        if date.time() > datetime.time(6, 00) and date.time() < datetime.time(18, 00):
-            indices.append(self.is_daytime_index)
-        else:
-            indices.append(self.is_nighttime_index)
-
-        prediction = self.R_hat + self.beta[indices].sum()
+            prediction = self.R_hat + self.beta[indices].sum()
+        except:
+            prediction = self.R_hat
         return prediction
 
 
