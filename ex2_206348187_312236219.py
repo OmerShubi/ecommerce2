@@ -196,7 +196,6 @@ class CompetitionRecommender(Recommender):
         ratings['date'] = pd.to_datetime(ratings['timestamp'], unit='s')
         ratings['weekday'] = pd.to_datetime(ratings['date']).dt.dayofweek  # monday = 0, sunday = 6
         ratings['year'] = pd.to_datetime(ratings['date']).dt.year
-        #ratings['week_number'] = pd.to_datetime(ratings['date']).dt.dayofweek
         ratings['quarter'] = pd.to_datetime(ratings['date']).dt.quarter
         ratings['is_weekend'] = 0
         ratings.loc[ratings['weekday'].isin([4, 5]), 'is_weekend'] = 1
@@ -224,7 +223,7 @@ class CompetitionRecommender(Recommender):
         Creates and solves the least squares regression
         :return: Tuple of X, b, y such that b is the solution to min ||Xb-y||
         """
-        self.beta = lsqr(self.X_scipy, self.y)[0]
+        self.beta = lsqr(self.X_scipy, self.y, damp=1)[0]
 
 
     def predict(self, user: int, item: int, timestamp: int) -> float:
@@ -235,8 +234,9 @@ class CompetitionRecommender(Recommender):
         :return: Predicted rating of the user for the item
         """
         prediction = self.raw_predict(user, item, timestamp)
-
-        return float(np.clip(prediction, a_min=0.5, a_max=5))
+        prediction = float(np.clip(prediction, a_min=0.5, a_max=5))
+        #prediction = round(prediction*2)/2
+        return prediction
 
     def raw_predict(self, user: int, item: int, timestamp: int) -> float:
         try:
@@ -249,9 +249,7 @@ class CompetitionRecommender(Recommender):
             except KeyError as e:
                 print(f"KeyError:{e}")
             date = datetime.datetime.fromtimestamp(timestamp)
-            #indices.append(self.X.columns.get_loc(f'weekday_{date.weekday()}'))
             indices.append(self.X.columns.get_loc(f'year_{date.year}'))
-            #indices.append(self.X.columns.get_loc(f'week_number_{int(date.isocalendar()[1])}'))
             indices.append(self.X.columns.get_loc(f'quarter_{(date.month-1)//3+1}'))
             if date.weekday() in [4, 5]:
                 indices.append(self.is_weekend_index)
