@@ -110,11 +110,12 @@ class NeighborhoodRecommender(Recommender):
         :return: Predicted rating of the user for the item
         """
         nearest_neighbours = self.binary_R_tilde.loc[item]*self.user_corr.loc[user]
-        nearest_neighbours.loc[nearest_neighbours == 0] = -1 * float('inf')
+
+        # nearest_neighbours.loc[nearest_neighbours == 0] = -1 * float('inf')
         # nearest_neighbours_corr = nearest_neighbours.nlargest(n=self.num_neighbours)
 
         nearest_neighbours.loc[nearest_neighbours == 0] = None
-        a = nearest_neighbours.reset_index().abs().dropna()
+        a = nearest_neighbours.reset_index().dropna().abs()
         a.rename(columns={a.columns[1]: 'corr'}, inplace=True)
         if len(a) <= self.num_neighbours:
             ind = np.arange(len(a))
