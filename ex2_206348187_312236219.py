@@ -223,7 +223,7 @@ class CompetitionRecommender(Recommender):
         Creates and solves the least squares regression
         :return: Tuple of X, b, y such that b is the solution to min ||Xb-y||
         """
-        self.beta = lsqr(self.X_scipy, self.y, damp=1)[0]
+        self.beta = lsqr(self.X_scipy, self.y, damp=2)[0]
 
 
     def predict(self, user: int, item: int, timestamp: int) -> float:
