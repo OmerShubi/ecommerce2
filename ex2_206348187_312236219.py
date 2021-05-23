@@ -7,8 +7,6 @@ import datetime
 # TODO run on VM
 
 
-
-
 class Recommender(abc.ABC):
     def __init__(self, ratings: pd.DataFrame):
         self.initialize_predictor(ratings)
@@ -40,7 +38,7 @@ class Recommender(abc.ABC):
 
 
 class BaselineRecommender(Recommender):
-    # TODO runtime 1 minute max
+    # runtime 1 minute max - took 40.73s
     def initialize_predictor(self, ratings: pd.DataFrame):
         ratings = ratings.copy(deep=True)
         ratings.drop('timestamp', axis=1, inplace=True)
@@ -111,24 +109,15 @@ class NeighborhoodRecommender(Recommender):
         """
         nearest_neighbours = self.binary_R_tilde.loc[item]*self.user_corr.loc[user]
 
-        # nearest_neighbours.loc[nearest_neighbours == 0] = -1 * float('inf')
-        # nearest_neighbours_corr = nearest_neighbours.nlargest(n=self.num_neighbours)
-
         nearest_neighbours.loc[nearest_neighbours == 0] = None
-        a = nearest_neighbours.reset_index().dropna().abs()
-        a.rename(columns={a.columns[1]: 'corr'}, inplace=True)
-        if len(a) <= self.num_neighbours:
-            ind = np.arange(len(a))
-        else:
-            ind = np.argpartition(a['corr'].values, -self.num_neighbours)[-self.num_neighbours:]
-        nearest_neighbours_corr = nearest_neighbours[a['index'].values[ind]]
+        nearest_neighbours_corr = nearest_neighbours[nearest_neighbours.abs().nlargest(n=self.num_neighbours).index]
 
         nearest_neighbours_ratings = self.R_tilde.loc[int(item), nearest_neighbours_corr.index]
         nominator = (nearest_neighbours_corr*nearest_neighbours_ratings).sum()
         denominator = nearest_neighbours_corr.abs().sum()
 
         # Handle case where there are no neighbours with correlation
-        if nominator == 0 or denominator == 0:
+        if nominator == 0 or denominator == 0:# and denominator != -1 * float('inf'):
             neighbour_deviation = 0
         else:
             neighbour_deviation = nominator / denominator

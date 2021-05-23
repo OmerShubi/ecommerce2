@@ -49,36 +49,36 @@ def main():
     train, test = train_test_split(ratings)
     # PART A
     start = time.time()
-    # baseline_recommender = ex2.BaselineRecommender(train)
-    # print(f'BaselineRecommender init took {time.time() - start:.2f}s')
-    # print(baseline_recommender.rmse(test))
-    # print(f'BaselineRecommender predict took {time.time() - start:.2f}s')
+    baseline_recommender = ex2.BaselineRecommender(train)
+    print(f'BaselineRecommender init took {time.time() - start:.2f}s')
+    print(baseline_recommender.rmse(test))
+    print(f'BaselineRecommender predict took {time.time() - start:.2f}s')
     #
     neighborhood_recommender = ex2.NeighborhoodRecommender(train)
     print(f'neighborhood_recommender init took {time.time() - start:.2f}s')
     print(neighborhood_recommender.rmse(test))
     print(f'neighborhood_recommender predict (total) took {time.time() - start:.2f}s')
     #
-    # # PART B
-    # start = time.time()
-    # ls_recommender = ex2.LSRecommender(train)
-    # print(f'ls_recommender init took {time.time() - start:.2f}s')
-    # ls_recommender.solve_ls()
-    # print(f'ls_recommender solve_ls took {time.time() - start:.2f}s')
-    # print(ls_recommender.rmse(test))
-    # print(f'ls_recommender predict (total) took {time.time() - start:.2f}s')
+    # PART B
+    start = time.time()
+    ls_recommender = ex2.LSRecommender(train)
+    print(f'ls_recommender init took {time.time() - start:.2f}s')
+    ls_recommender.solve_ls()
+    print(f'ls_recommender solve_ls took {time.time() - start:.2f}s')
+    print(ls_recommender.rmse(test))
+    print(f'ls_recommender predict (total) took {time.time() - start:.2f}s')
 
     # PART C
-    start = time.time()
-    ratings_comp = pd.read_csv('ratings_comp.csv')
-    comp_recommender = ex2.CompetitionRecommender(ratings_comp)
-    # print(comp_recommender.rmse(test_comp))
-
-    comp_recommender = ex2.CompetitionRecommender(train)
-    print(f'Comp init time took {time.time() - start:.2f}s')
-    print(comp_recommender.rmse(test))
-
-    print(f'Comp total time took {time.time() - start:.2f}s')
+    # start = time.time()
+    # ratings_comp = pd.read_csv('ratings_comp.csv')
+    # comp_recommender = ex2.CompetitionRecommender(ratings_comp)
+    # # print(comp_recommender.rmse(test_comp))
+    #
+    # comp_recommender = ex2.CompetitionRecommender(train)
+    # print(f'Comp init time took {time.time() - start:.2f}s')
+    # print(comp_recommender.rmse(test))
+    #
+    # print(f'Comp total time took {time.time() - start:.2f}s')
 
 
 if __name__ == '__main__':
