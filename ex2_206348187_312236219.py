@@ -195,6 +195,7 @@ class CompetitionRecommender(Recommender):
         raw_ratings = ratings.copy(deep=True)
         ratings['date'] = pd.to_datetime(ratings['timestamp'], unit='s')
         ratings['weekday'] = pd.to_datetime(ratings['date']).dt.dayofweek  # monday = 0, sunday = 6
+        ratings['year'] = pd.to_datetime(ratings['date']).dt.year
         ratings['is_weekend'] = 0
         ratings.loc[ratings['weekday'].isin([4, 5]), 'is_weekend'] = 1
         ratings['is_daytime'] = ratings['date'].dt.time.between(datetime.time(6, 00), datetime.time(18, 00))
@@ -205,7 +206,7 @@ class CompetitionRecommender(Recommender):
         self.y = ratings['rating'] - self.R_hat
         ratings.drop(['timestamp', 'rating', 'date', 'weekday'], axis=1, inplace=True)
         ratings = ratings.astype(int)
-        self.X = pd.get_dummies(ratings, columns=['user', 'item'], sparse=True)
+        self.X = pd.get_dummies(ratings, columns=['user', 'item', 'year'], sparse=True)
         self.is_weekend_index = self.X.columns.get_loc('is_weekend')
         self.is_daytime_index = self.X.columns.get_loc('is_daytime')
         self.is_nighttime_index = self.X.columns.get_loc('is_nighttime')
@@ -247,6 +248,7 @@ class CompetitionRecommender(Recommender):
                 print(f"KeyError:{e}")
             date = datetime.datetime.fromtimestamp(timestamp)
             #indices.append(self.X.columns.get_loc(f'weekday_{date.weekday()}'))
+            indices.append(self.X.columns.get_loc(f'year_{date.year}'))
             if date.weekday() in [4, 5]:
                 indices.append(self.is_weekend_index)
 

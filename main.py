@@ -61,12 +61,12 @@ def main():
     #
     # PART B
     # start = time.time()
-    # ls_recommender = ex2.LSRecommender(train)
-    # print(f'ls_recommender init took {time.time() - start:.2f}s')
-    # ls_recommender.solve_ls()
-    # print(f'ls_recommender solve_ls took {time.time() - start:.2f}s')
-    # print(ls_recommender.rmse(test))
-    # print(f'ls_recommender predict (total) took {time.time() - start:.2f}s')
+    ls_recommender = ex2.LSRecommender(train)
+    print(f'ls_recommender init took {time.time() - start:.2f}s')
+    ls_recommender.solve_ls()
+    print(f'ls_recommender solve_ls took {time.time() - start:.2f}s')
+    print(ls_recommender.rmse(test))
+    print(f'ls_recommender predict (total) took {time.time() - start:.2f}s')
 
     # PART C
     start = time.time()
