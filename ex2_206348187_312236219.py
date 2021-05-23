@@ -111,14 +111,23 @@ class NeighborhoodRecommender(Recommender):
         """
         nearest_neighbours = self.binary_R_tilde.loc[item]*self.user_corr.loc[user]
         nearest_neighbours.loc[nearest_neighbours == 0] = -1 * float('inf')
-        nearest_neighbours_corr = nearest_neighbours.nlargest(n=self.num_neighbours)
+        # nearest_neighbours_corr = nearest_neighbours.nlargest(n=self.num_neighbours)
+
+        nearest_neighbours.loc[nearest_neighbours == 0] = None
+        a = nearest_neighbours.reset_index().abs().dropna()
+        a.rename(columns={a.columns[1]: 'corr'}, inplace=True)
+        if len(a) <= self.num_neighbours:
+            ind = np.arange(len(a))
+        else:
+            ind = np.argpartition(a['corr'].values, -self.num_neighbours)[-self.num_neighbours:]
+        nearest_neighbours_corr = nearest_neighbours[a['index'].values[ind]]
 
         nearest_neighbours_ratings = self.R_tilde.loc[int(item), nearest_neighbours_corr.index]
         nominator = (nearest_neighbours_corr*nearest_neighbours_ratings).sum()
         denominator = nearest_neighbours_corr.abs().sum()
 
         # Handle case where there are no neighbours with correlation
-        if nominator == 0 or denominator == 0 or denominator == float('inf'):
+        if nominator == 0 or denominator == 0:
             neighbour_deviation = 0
         else:
             neighbour_deviation = nominator / denominator
