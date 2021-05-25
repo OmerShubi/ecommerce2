@@ -4,9 +4,7 @@ import pandas as pd
 import numpy as np
 import datetime
 from scipy.sparse.linalg import lsqr
-import scipy.sparse
-# NO GLOBAL PARAMS
-# TODO run on VM
+from scipy.sparse import lil_matrix
 
 
 class Recommender(abc.ABC):
@@ -61,8 +59,10 @@ class BaselineRecommender(Recommender):
         :param timestamp: Rating timestamp
         :return: Predicted rating of the user for the item
         """
-
-        prediction = self.R_hat + self.B_u.loc[user, 'user_rating_mean'] + self.B_i.loc[item, 'item_rating_mean']
+        try:
+            prediction = self.R_hat + self.B_u.loc[user, 'user_rating_mean'] + self.B_i.loc[item, 'item_rating_mean']
+        except Exception:
+            prediction = self.R_hat
         return float(np.clip(prediction, a_min=0.5, a_max=5))
 
 class NeighborhoodRecommender(Recommender):
@@ -122,7 +122,10 @@ class NeighborhoodRecommender(Recommender):
         else:
             neighbour_deviation = nominator / denominator
 
-        prediction = self.R_hat + self.B_u.loc[user, 'user_rating_mean'] + self.B_i.loc[item, 'item_rating_mean'] + neighbour_deviation
+        try:
+            prediction = self.R_hat + self.B_u.loc[user, 'user_rating_mean'] + self.B_i.loc[item, 'item_rating_mean'] + neighbour_deviation
+        except Exception:
+            prediction = self.R_hat
         return float(np.clip(prediction, a_min=0.5, a_max=5))
 
     def user_similarity(self, user1: int, user2: int) -> float:
@@ -162,22 +165,25 @@ class LSRecommender(Recommender):
         :param timestamp: Rating timestamp
         :return: Predicted rating of the user for the item
         """
-        # According to result of pd.get_dummies!
-        user_index = self.X.columns.get_loc(f'user_{user}')
-        item_index = self.X.columns.get_loc(f'item_{item}')
-        indices = [user_index, item_index]
+        try:
+            # According to result of pd.get_dummies!
+            user_index = self.X.columns.get_loc(f'user_{user}')
+            item_index = self.X.columns.get_loc(f'item_{item}')
+            indices = [user_index, item_index]
 
-        date = datetime.datetime.fromtimestamp(timestamp)
+            date = datetime.datetime.fromtimestamp(timestamp)
 
-        if date.weekday() in [4, 5]:
-            indices.append(self.is_weekend_index)
+            if date.weekday() in [4, 5]:
+                indices.append(self.is_weekend_index)
 
-        if date.time() > datetime.time(6, 00) and date.time() < datetime.time(18, 00):
-            indices.append(self.is_daytime_index)
-        else:
-            indices.append(self.is_nighttime_index)
+            if date.time() > datetime.time(6, 00) and date.time() < datetime.time(18, 00):
+                indices.append(self.is_daytime_index)
+            else:
+                indices.append(self.is_nighttime_index)
 
-        prediction = self.R_hat + self.beta[indices].sum()
+            prediction = self.R_hat + self.beta[indices].sum()
+        except Exception:
+            prediction = self.R_hat
 
         return float(np.clip(prediction, a_min=0.5, a_max=5))
 
@@ -192,7 +198,6 @@ class LSRecommender(Recommender):
 class CompetitionRecommender(Recommender):
     def initialize_predictor(self, ratings: pd.DataFrame):
         ratings = ratings.copy(deep=True)
-        raw_ratings = ratings.copy(deep=True)
         ratings['date'] = pd.to_datetime(ratings['timestamp'], unit='s')
         ratings['weekday'] = pd.to_datetime(ratings['date']).dt.dayofweek  # monday = 0, sunday = 6
         ratings['year'] = pd.to_datetime(ratings['date']).dt.year
@@ -211,8 +216,7 @@ class CompetitionRecommender(Recommender):
         self.is_weekend_index = self.X.columns.get_loc('is_weekend')
         self.is_daytime_index = self.X.columns.get_loc('is_daytime')
         self.is_nighttime_index = self.X.columns.get_loc('is_nighttime')
-        # self.X_scipy = scipy.sparse.csr_matrix(self.X.values)
-        self.X_scipy = data_frame_to_scipy_sparse_matrix(self.X)
+        self.X_scipy = CompetitionRecommender.data_frame_to_scipy_sparse_matrix(self.X)
 
         self.solve_ls()
 
@@ -247,7 +251,8 @@ class CompetitionRecommender(Recommender):
                 item_index = self.X.columns.get_loc(f'item_{item}')
                 indices.append(item_index)
             except KeyError as e:
-                print(f"KeyError:{e}")
+                # print(f"KeyError:{e}")
+                pass
             date = datetime.datetime.fromtimestamp(timestamp)
             indices.append(self.X.columns.get_loc(f'year_{date.year}'))
             indices.append(self.X.columns.get_loc(f'quarter_{(date.month-1)//3+1}'))
@@ -265,18 +270,16 @@ class CompetitionRecommender(Recommender):
         return prediction
 
 
+    @staticmethod
+    def data_frame_to_scipy_sparse_matrix(df):
+        """
+        Converts a sparse pandas data frame to sparse scipy csr_matrix.
+        :param df: pandas data frame
+        :return: csr_matrix
+        """
+        arr = lil_matrix(df.shape, dtype=np.float32)
+        for i, col in enumerate(df.columns):
+            ix = df[col] != 0
+            arr[np.where(ix), i] = 1
 
-from scipy.sparse import lil_matrix
-
-def data_frame_to_scipy_sparse_matrix(df):
-    """
-    Converts a sparse pandas data frame to sparse scipy csr_matrix.
-    :param df: pandas data frame
-    :return: csr_matrix
-    """
-    arr = lil_matrix(df.shape, dtype=np.float32)
-    for i, col in enumerate(df.columns):
-        ix = df[col] != 0
-        arr[np.where(ix), i] = 1
-
-    return arr.tocsr()
+        return arr.tocsr()

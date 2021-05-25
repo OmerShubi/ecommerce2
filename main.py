@@ -73,8 +73,9 @@ def main():
     ratings_comp = pd.read_csv('ratings_comp.csv')
     comp_recommender = ex2.CompetitionRecommender(ratings_comp)
     # print(comp_recommender.rmse(test_comp))
-
-    # comp_recommender = ex2.CompetitionRecommender(train)
+    print(f'Comp init time took {time.time() - start:.2f}s')
+    print(comp_recommender.rmse(test))
+    comp_recommender = ex2.CompetitionRecommender(train)
     print(f'Comp init time took {time.time() - start:.2f}s')
     print(comp_recommender.rmse(test))
 
