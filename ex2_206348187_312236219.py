@@ -211,9 +211,9 @@ class CompetitionRecommender(Recommender):
         self.is_weekend_index = self.X.columns.get_loc('is_weekend')
         self.is_daytime_index = self.X.columns.get_loc('is_daytime')
         self.is_nighttime_index = self.X.columns.get_loc('is_nighttime')
-        self.X_scipy = scipy.sparse.csr_matrix(self.X.values)
+        # self.X_scipy = scipy.sparse.csr_matrix(self.X.values)
+        self.X_scipy = data_frame_to_scipy_sparse_matrix(self.X)
 
-        #self.beta = np.zeros((len(self.X.columns),))
         self.solve_ls()
 
 
@@ -223,7 +223,7 @@ class CompetitionRecommender(Recommender):
         Creates and solves the least squares regression
         :return: Tuple of X, b, y such that b is the solution to min ||Xb-y||
         """
-        self.beta = lsqr(self.X_scipy, self.y, damp=1.5, show=True)[0]
+        self.beta = lsqr(self.X_scipy, self.y, damp=1.5, show=False)[0]
 
 
     def predict(self, user: int, item: int, timestamp: int) -> float:
@@ -265,3 +265,18 @@ class CompetitionRecommender(Recommender):
         return prediction
 
 
+
+from scipy.sparse import lil_matrix
+
+def data_frame_to_scipy_sparse_matrix(df):
+    """
+    Converts a sparse pandas data frame to sparse scipy csr_matrix.
+    :param df: pandas data frame
+    :return: csr_matrix
+    """
+    arr = lil_matrix(df.shape, dtype=np.float32)
+    for i, col in enumerate(df.columns):
+        ix = df[col] != 0
+        arr[np.where(ix), i] = 1
+
+    return arr.tocsr()
