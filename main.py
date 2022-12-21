@@ -1,4 +1,4 @@
-import ex2_206348187_312236219 as ex2
+import ex2_1_2 as ex2
 import pandas as pd
 import numpy as np
 import time
